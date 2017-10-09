@@ -1,5 +1,5 @@
 /*-------------------------------------------------------------------------
-NeoPixel library helper functions for Esp8266.
+NeoPixel library helper functions for Esp8266 and Esp32
 
 Written by Michael C. Miller.
 
@@ -26,35 +26,53 @@ License along with NeoPixel.  If not, see
 
 #pragma once
 
-#ifdef ARDUINO_ARCH_ESP8266
+#if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)
 
-// due to linker overriding the ICACHE_RAM_ATTR for cpp files, these methods are
+// ESP32 doesn't define ICACHE_RAM_ATTR
+#ifndef ICACHE_RAM_ATTR
+#define ICACHE_RAM_ATTR IRAM_ATTR
+#endif
+
+// for esp8266, due to linker overriding the ICACHE_RAM_ATTR for cpp files, these methods are
 // moved into a C file so the attribute will be applied correctly
+// >> this may have been fixed and is no longer a requirement <<
 extern "C" void ICACHE_RAM_ATTR bitbang_send_pixels_800(uint8_t* pixels, uint8_t* end, uint8_t pin);
 extern "C" void ICACHE_RAM_ATTR bitbang_send_pixels_400(uint8_t* pixels, uint8_t* end, uint8_t pin);
 
-class NeoEsp8266BitBangSpeed800Kbps
+class NeoEspBitBangSpeedWs2813
 {
 public:
     static void send_pixels(uint8_t* pixels, uint8_t* end, uint8_t pin)
     {
         bitbang_send_pixels_800(pixels, end, pin);
     }
+    static const uint32_t ResetTimeUs = 250;
 };
 
-class NeoEsp8266BitBangSpeed400Kbps
+class NeoEspBitBangSpeed800Kbps
+{
+public:
+    static void send_pixels(uint8_t* pixels, uint8_t* end, uint8_t pin)
+    {
+        bitbang_send_pixels_800(pixels, end, pin);
+    }
+    static const uint32_t ResetTimeUs = 50; 
+};
+
+class NeoEspBitBangSpeed400Kbps
 {
 public:
     static void send_pixels(uint8_t* pixels, uint8_t* end, uint8_t pin)
     {
         bitbang_send_pixels_400(pixels, end, pin);
     }
+    static const uint32_t ResetTimeUs = 50;
 };
 
-template<typename T_SPEED> class NeoEsp8266BitBangMethodBase
+template<typename T_SPEED> class NeoEspBitBangMethodBase
 {
 public:
-    NeoEsp8266BitBangMethodBase(uint8_t pin, uint16_t pixelCount, size_t elementSize) :
+    NeoEspBitBangMethodBase(uint8_t pin, uint16_t pixelCount, size_t elementSize) :
         _pin(pin)
     {
         pinMode(pin, OUTPUT);
@@ -64,7 +82,7 @@ public:
         memset(_pixels, 0, _sizePixels);
     }
 
-    ~NeoEsp8266BitBangMethodBase()
+    ~NeoEspBitBangMethodBase()
     {
         pinMode(_pin, INPUT);
 
@@ -75,7 +93,7 @@ public:
     {
         uint32_t delta = micros() - _endTime;
 
-        return (delta >= 50L);
+        return (delta >= T_SPEED::ResetTimeUs);
     }
 
     void Initialize()
@@ -125,7 +143,24 @@ private:
     uint8_t _pin;            // output pin number
 };
 
-typedef NeoEsp8266BitBangMethodBase<NeoEsp8266BitBangSpeed800Kbps> NeoEsp8266BitBang800KbpsMethod;
-typedef NeoEsp8266BitBangMethodBase<NeoEsp8266BitBangSpeed400Kbps> NeoEsp8266BitBang400KbpsMethod;
+
+#if defined(ARDUINO_ARCH_ESP32)
+
+typedef NeoEspBitBangMethodBase<NeoEspBitBangSpeedWs2813> NeoEsp32BitBangWs2813Method;
+typedef NeoEspBitBangMethodBase<NeoEspBitBangSpeed800Kbps> NeoEsp32BitBang800KbpsMethod;
+typedef NeoEspBitBangMethodBase<NeoEspBitBangSpeed400Kbps> NeoEsp32BitBang400KbpsMethod;
+
+// Bitbang method is the default method for Esp32
+typedef NeoEsp32BitBangWs2813Method NeoWs2813Method;
+typedef NeoEsp32BitBang800KbpsMethod Neo800KbpsMethod;
+typedef NeoEsp32BitBang400KbpsMethod Neo400KbpsMethod;
+
+#else
+
+typedef NeoEspBitBangMethodBase<NeoEspBitBangSpeedWs2813> NeoEsp8266BitBangWs2813Method;
+typedef NeoEspBitBangMethodBase<NeoEspBitBangSpeed800Kbps> NeoEsp8266BitBang800KbpsMethod;
+typedef NeoEspBitBangMethodBase<NeoEspBitBangSpeed400Kbps> NeoEsp8266BitBang400KbpsMethod;
+
+#endif
 
 #endif
